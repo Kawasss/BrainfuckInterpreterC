@@ -94,6 +94,34 @@ int DecrementAddressPointer(Memory* memory)
 
 FILE* sourceFile = NULL;
 
+int FindEndOfLoop(byte* instructions, int* index, int length)
+{
+	int amountOfEndsToSkip = 0;
+	int foundEndBracket = 0;
+	int i = *index + 1;								// make the i ""global"" for this function for the error
+	for (; i < length && !foundEndBracket; i++)
+	{
+		if (instructions[i] == '[')
+			amountOfEndsToSkip++;
+		if (instructions[i] == ']')
+		{
+			if (amountOfEndsToSkip <= 0)			// if there are no other '['s that dont have an end yet
+			{
+				foundEndBracket = 1;
+				break;
+			}
+			amountOfEndsToSkip--;
+		}
+	}
+	if (!foundEndBracket)							// if there is a stray '[' this error gets thrown
+	{
+		printf("Error: no ']' could be found to match the '[' at %i\n", *index + 1);
+		return 0;
+	}
+	*index = i;
+	return 1;
+}
+
 int ParseInstructions(byte* instructions, int length)
 {
 	List bracketStartIndices = CreateList();
@@ -124,13 +152,19 @@ int ParseInstructions(byte* instructions, int length)
 			}
 			break;
 		case '.': // output
-			printf("%c", (unsigned char)memory.buffer[memory.address]); // the (unsigned char) prevents a warning
+			printf("%c", (unsigned char)memory.buffer[memory.address]);			// the (unsigned char) prevents a warning
 			break;
 		case ',': // input
 			printf("Waiting for input: ");
 			memory.buffer[memory.address] = getchar();
 		case '[': // start while > 0 loop
-			if (!AddValueToList(&bracketStartIndices, i))
+			if (memory.buffer[memory.address] == 0)								// go to the end of the loop if the current value is 0
+			{
+				if (!FindEndOfLoop(instructions, &i, length))
+					return;
+				
+			}
+			else if (!AddValueToList(&bracketStartIndices, i))
 			{
 				printf("Failed to register a '[' instruction\n");
 				return 0;
@@ -149,10 +183,12 @@ int ParseInstructions(byte* instructions, int length)
 			break;
 		}
 	}
+	free(memory.buffer);
+	free(bracketStartIndices.buffer);
 	return 1;
 }
 
-void main(int argsCount, char** args)
+int main(int argsCount, char** args)
 {
 	if (argsCount <= 1)
 		args[1] = "helloWorld.bf";
